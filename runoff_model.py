@@ -103,37 +103,77 @@ def dataframe_to_tensor(df: pd.DataFrame) -> torch.Tensor:
     return torch.tensor(numeric.values, dtype=torch.float32)
 
 
-def train_model(data: ElectionData, epochs: int = 100, batch_size: int = 64) -> RunoffPredictor:
+def train_model(
+    data: ElectionData,
+    epochs: int = 100,
+    batch_size: int = 64,
+    val_split: float = 0.1,
+    val_data: Optional[ElectionData] = None,
+) -> RunoffPredictor:
+    """Train ``RunoffPredictor`` with optional validation/early stopping."""
+
     X = dataframe_to_tensor(data.features)
     y_sim = torch.tensor(data.target_simion.values, dtype=torch.float32).unsqueeze(1)
     y_dan = torch.tensor(data.target_dan.values, dtype=torch.float32).unsqueeze(1)
 
-    dataset = TensorDataset(X, y_sim, y_dan)
-    loader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
+    if val_data is not None:
+        val_X = dataframe_to_tensor(val_data.features)
+        val_y_sim = torch.tensor(val_data.target_simion.values, dtype=torch.float32).unsqueeze(1)
+        val_y_dan = torch.tensor(val_data.target_dan.values, dtype=torch.float32).unsqueeze(1)
+        train_dataset = TensorDataset(X, y_sim, y_dan)
+    else:
+        n_val = max(1, int(len(X) * val_split))
+        perm = torch.randperm(len(X))
+        val_indices = perm[:n_val]
+        train_indices = perm[n_val:]
+        val_X = X[val_indices]
+        val_y_sim = y_sim[val_indices]
+        val_y_dan = y_dan[val_indices]
+        X = X[train_indices]
+        y_sim = y_sim[train_indices]
+        y_dan = y_dan[train_indices]
+        train_dataset = TensorDataset(X, y_sim, y_dan)
+
+    val_dataset = TensorDataset(val_X, val_y_sim, val_y_dan)
+
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+    val_loader = DataLoader(val_dataset, batch_size=batch_size)
 
     model = RunoffPredictor(X.shape[1])
     opt = torch.optim.Adam(model.parameters(), lr=1e-3)
 
-    best_loss = float("inf")
+    best_val_loss = float("inf")
     patience = 10
     wait = 0
 
     for epoch in range(epochs):
         model.train()
-        for batch_X, batch_y_sim, batch_y_dan in loader:
+        for batch_X, batch_y_sim, batch_y_dan in train_loader:
             opt.zero_grad()
             pred_sim, pred_dan = model(batch_X)
             loss = F.mse_loss(pred_sim, batch_y_sim) + F.mse_loss(pred_dan, batch_y_dan)
             loss.backward()
             opt.step()
-        # simple early stopping based on loss
-        if loss.item() < best_loss:
-            best_loss = loss.item()
+
+        # validation
+        model.eval()
+        val_losses = []
+        with torch.no_grad():
+            for batch_X, batch_y_sim, batch_y_dan in val_loader:
+                pred_sim, pred_dan = model(batch_X)
+                v_loss = F.mse_loss(pred_sim, batch_y_sim) + F.mse_loss(pred_dan, batch_y_dan)
+                val_losses.append(v_loss.item())
+        epoch_val_loss = float(np.mean(val_losses)) if val_losses else float("inf")
+
+        # early stopping on validation loss
+        if epoch_val_loss < best_val_loss:
+            best_val_loss = epoch_val_loss
             wait = 0
         else:
             wait += 1
             if wait >= patience:
                 break
+
     return model
 
 

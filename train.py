@@ -14,6 +14,12 @@ def main() -> None:
     parser.add_argument("--simion-col", required=True, help="Column name of Simion votes in second round")
     parser.add_argument("--dan-col", required=True, help="Column name of Dan votes in second round")
     parser.add_argument("--output", default="model.pt", help="Where to save trained model")
+    parser.add_argument(
+        "--val-split",
+        type=float,
+        default=0.1,
+        help="Fraction of data used for validation",
+    )
     args = parser.parse_args()
 
     id_cols = ["Judet", "UAT", "Siruta", "Nr sectie"]
@@ -28,7 +34,7 @@ def main() -> None:
         args.simion_col,
         args.dan_col,
     )
-    model = train_model(data)
+    model = train_model(data, val_split=args.val_split)
     torch.save(model.state_dict(), args.output)
     print(f"Model saved to {args.output}")
 
