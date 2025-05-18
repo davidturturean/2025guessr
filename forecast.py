@@ -1,15 +1,25 @@
 import argparse
 from pathlib import Path
 
-import pandas as pd
 import torch
 
-from runoff_model import RunoffPredictor, dataframe_to_tensor, ElectionForecaster
+from runoff_model import (
+    RunoffPredictor,
+    dataframe_to_tensor,
+    ElectionForecaster,
+    load_features,
+)
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run live forecast")
-    parser.add_argument("--features", required=True, help="CSV with 2025 first round features")
+    parser.add_argument(
+        "--features",
+        action="append",
+        required=True,
+        help="Path to first round results CSV. May be passed multiple times.",
+    )
+    parser.add_argument("--demo", help="Optional demographics CSV")
     parser.add_argument("--model", default="model.pt", help="Trained model weights")
     parser.add_argument("--id-cols", nargs="*", default=["Judet", "UAT", "Siruta", "Nr sectie"], help="Columns identifying a precinct")
     parser.add_argument(
@@ -19,7 +29,9 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    features = pd.read_csv(args.features)
+    feature_paths = [Path(p) for p in args.features]
+    demo_path = Path(args.demo) if args.demo else None
+    features = load_features(feature_paths, demo_path, args.id_cols)
     X = dataframe_to_tensor(features.drop(columns=args.id_cols))
     model = RunoffPredictor(X.shape[1])
     state = torch.load(args.model, map_location=torch.device("cpu"))
