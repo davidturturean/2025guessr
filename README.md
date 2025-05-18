@@ -31,4 +31,6 @@ The `forecast.py` script loads the trained model and a features CSV (for example
 python forecast.py --features data/pv_part_cntry_prsd_05062025.csv --model model.pt
 ```
 
+Add `--no-error-adjustment` to disable the dynamic error correction based on reported precincts.
+
 Real-time updates can be performed by using the `ElectionForecaster` class from `runoff_model.py` and calling `update_precinct` as results come in.
