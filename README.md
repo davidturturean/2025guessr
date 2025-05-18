@@ -21,6 +21,18 @@ python train.py \
   --dan-col DANCILA_VIORICA
 ```
 
+To train on multiple past elections at once, simply pass several paths to each
+option:
+
+```bash
+python train.py \
+  --demo data/demographics_11102019.csv data/demographics_11242024.csv \
+  --first data/pv_part_cntry_prsd_11102019.csv data/pv_part_cntry_prsd_11242024.csv \
+  --second data/pv_part_cntry_prsd_11242019.csv data/pv_part_cntry_prsd_11242024.csv \
+  --simion-col IOHANNIS_KLAUS_WERNER \
+  --dan-col DANCILA_VIORICA
+```
+
 This command trains the model and saves the weights to `model.pt`.
 
 ## Forecasting
