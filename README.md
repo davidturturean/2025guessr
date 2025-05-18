@@ -25,10 +25,16 @@ This command trains the model and saves the weights to `model.pt`.
 
 ## Forecasting
 
-The `forecast.py` script loads the trained model and a features CSV (for example the first round of 2025) and prints an initial forecast with uncertainty estimates:
+The `forecast.py` script can combine multiple first round result files and optionally demographics before running the forecast. Pass `--features` for each results CSV and `--demo` for the demographics table:
 
 ```bash
-python forecast.py --features data/pv_part_cntry_prsd_05062025.csv --model model.pt
+python forecast.py \
+  --features data/pv_part_cntry_prsd_05062025.csv \
+  --features data/pv_part_cntry_prsd_c_05062025.csv \
+  --demo data/demographics_05042025.csv \
+  --model model.pt
 ```
+
+Behind the scenes these files are merged on the precinct ID columns via `load_features` in `runoff_model.py`. The script then prints an initial forecast with uncertainty estimates.
 
 Real-time updates can be performed by using the `ElectionForecaster` class from `runoff_model.py` and calling `update_precinct` as results come in.

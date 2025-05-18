@@ -48,6 +48,28 @@ def load_csv(path: Path) -> pd.DataFrame:
         return pd.read_csv(f)
 
 
+def load_features(
+    first_round_paths: List[Path], demo_path: Optional[Path], id_cols: List[str]
+) -> pd.DataFrame:
+    """Load and merge first round results and optional demographics."""
+    if not first_round_paths:
+        raise ValueError("At least one first round file must be provided")
+
+    # load first round CSVs
+    dfs = [load_csv(p) for p in first_round_paths]
+    features = dfs[0]
+    for df in dfs[1:]:
+        features = features.merge(df, on=id_cols, suffixes=("", "_y"))
+
+    if demo_path is not None:
+        demo = load_csv(demo_path)
+        features = features.merge(demo, on=id_cols, how="left")
+
+    # remove duplicate columns created by merges
+    features = features.loc[:, ~features.columns.duplicated()]
+    return features
+
+
 def prepare_training_data(
     demo_path: Path,
     first_round_path: Path,
