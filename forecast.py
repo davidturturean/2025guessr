@@ -22,6 +22,11 @@ def main() -> None:
     parser.add_argument("--demo", help="Optional demographics CSV")
     parser.add_argument("--model", default="model.pt", help="Trained model weights")
     parser.add_argument("--id-cols", nargs="*", default=["Judet", "UAT", "Siruta", "Nr sectie"], help="Columns identifying a precinct")
+    parser.add_argument(
+        "--no-error-adjustment",
+        action="store_true",
+        help="Disable precinct error adjustment",
+    )
     args = parser.parse_args()
 
     feature_paths = [Path(p) for p in args.features]
@@ -32,7 +37,12 @@ def main() -> None:
     state = torch.load(args.model, map_location=torch.device("cpu"))
     model.load_state_dict(state)
 
-    forecaster = ElectionForecaster(model, features, id_cols=args.id_cols)
+    forecaster = ElectionForecaster(
+        model,
+        features,
+        id_cols=args.id_cols,
+        adjust_errors=not args.no_error_adjustment,
+    )
     (totals_sim, totals_dan), (std_sim, std_dan) = forecaster.forecast_totals()
     print("Initial forecast: Simion={:.0f} Dan={:.0f}".format(totals_sim, totals_dan))
     print("Std dev: Simion={:.1f} Dan={:.1f}".format(std_sim, std_dan))

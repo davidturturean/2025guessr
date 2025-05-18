@@ -35,6 +35,4 @@ python forecast.py \
   --model model.pt
 ```
 
-Behind the scenes these files are merged on the precinct ID columns via `load_features` in `runoff_model.py`. The script then prints an initial forecast with uncertainty estimates.
-
 Real-time updates can be performed by using the `ElectionForecaster` class from `runoff_model.py` and calling `update_precinct` as results come in.

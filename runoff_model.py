@@ -1,7 +1,7 @@
 import csv
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Tuple, Optional
+from typing import Dict, List, Tuple, Optional
 
 import numpy as np
 import pandas as pd
@@ -161,7 +161,14 @@ def predict_with_uncertainty(model: RunoffPredictor, X: torch.Tensor, n_samples:
 class ElectionForecaster:
     """Manage live precinct updates and national forecast."""
 
-    def __init__(self, model: RunoffPredictor, features: pd.DataFrame, id_cols: List[str]):
+    def __init__(
+        self,
+        model: RunoffPredictor,
+        features: pd.DataFrame,
+        id_cols: List[str],
+        group_cols: Optional[List[str]] = None,
+        adjust_errors: bool = True,
+    ) -> None:
         self.model = model
         self.id_cols = id_cols
         self.features = features.set_index(id_cols)
@@ -173,10 +180,38 @@ class ElectionForecaster:
         self.pred_sim = self.pred_sim.detach().numpy().squeeze()
         self.pred_dan = self.pred_dan.detach().numpy().squeeze()
 
+        possible_cols = [
+            "Judet",
+            "Județ",
+            "county",
+            "precinct_county_name",
+            "cluster",
+            "Cluster",
+        ]
+        if group_cols is None:
+            group_cols = [c for c in possible_cols if c in self.features.columns]
+            if group_cols:
+                group_cols = group_cols[:1]
+        self.group_cols = group_cols or []
+        self.adjust_errors = adjust_errors and bool(self.group_cols)
+        self.group_info = self.features[self.group_cols] if self.group_cols else None
+        self.error_sum: Dict[Tuple, np.ndarray] = {}
+        self.error_count: Dict[Tuple, int] = {}
+
     def update_precinct(self, precinct_id: Tuple, simion_votes: float, dan_votes: float):
         if precinct_id not in self.unreported:
             return
         idx = self.unreported.index(precinct_id)
+        if self.adjust_errors:
+            pred_sim = float(self.pred_sim[idx])
+            pred_dan = float(self.pred_dan[idx])
+            group_key = tuple(self.group_info.loc[precinct_id])
+            err = np.array([simion_votes - pred_sim, dan_votes - pred_dan])
+            if group_key not in self.error_sum:
+                self.error_sum[group_key] = np.array([0.0, 0.0])
+                self.error_count[group_key] = 0
+            self.error_sum[group_key] += err
+            self.error_count[group_key] += 1
         self.reported_simion += simion_votes
         self.reported_dan += dan_votes
         self.unreported.pop(idx)
@@ -190,6 +225,13 @@ class ElectionForecaster:
         (pred_sim_mean, pred_dan_mean), (pred_sim_std, pred_dan_std) = predict_with_uncertainty(
             self.model, self.feature_tensor, n_samples=n_samples
         )
+        if self.adjust_errors:
+            for i, precinct_id in enumerate(self.unreported):
+                group_key = tuple(self.group_info.loc[precinct_id])
+                if group_key in self.error_sum:
+                    avg = self.error_sum[group_key] / self.error_count[group_key]
+                    pred_sim_mean[i] += avg[0]
+                    pred_dan_mean[i] += avg[1]
         total_sim_mean = self.reported_simion + pred_sim_mean.sum()
         total_dan_mean = self.reported_dan + pred_dan_mean.sum()
         total_sim_std = np.sqrt((pred_sim_std ** 2).sum())
