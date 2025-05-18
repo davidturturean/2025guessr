@@ -77,6 +77,26 @@ def prepare_training_data(
     return ElectionData(features=features, target_simion=target_simion, target_dan=target_dan)
 
 
+def load_multi_election_data(
+    demo_paths: List[Path],
+    first_round_paths: List[Path],
+    second_round_paths: List[Path],
+    id_cols: List[str],
+    simion_col: str,
+    dan_col: str,
+) -> ElectionData:
+    """Load and concatenate training data from several elections."""
+    datasets = []
+    for d_path, f_path, s_path in zip(demo_paths, first_round_paths, second_round_paths):
+        datasets.append(
+            prepare_training_data(d_path, f_path, s_path, id_cols, simion_col, dan_col)
+        )
+    features = pd.concat([d.features for d in datasets], ignore_index=True)
+    target_simion = pd.concat([d.target_simion for d in datasets], ignore_index=True)
+    target_dan = pd.concat([d.target_dan for d in datasets], ignore_index=True)
+    return ElectionData(features=features, target_simion=target_simion, target_dan=target_dan)
+
+
 def dataframe_to_tensor(df: pd.DataFrame) -> torch.Tensor:
     """Convert numeric dataframe to a float32 tensor."""
     numeric = df.select_dtypes(include=[np.number]).fillna(0)
